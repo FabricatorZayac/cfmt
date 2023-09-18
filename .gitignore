@@ -1,0 +1,6 @@
+zig-cache
+zig-out
+target
+obj
+compile_commands.json
+.cache
