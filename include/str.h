@@ -18,7 +18,7 @@ typedef struct {
 typedef struct {
     str_t (*from_cstr)(char *);
     str_t (*slice)(str_t, range_t);
-    Display_t (*display)(const str_t *);
+    fmt_t (*fmt)(const str_t *);
 } str_mt;
 
 extern const str_mt str;
