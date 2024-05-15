@@ -90,7 +90,7 @@ static fmt_error vfprint(FILE *stream, const char *format, va_list argv) {
 
 static fmt_error fprint(FILE *stream, const char *fmt, ...) {
     va_list argv;
-    va_start(argv, argc);
+    va_start(argv, fmt);
     fmt_error err = vfprint(stream, fmt, argv);
     va_end(argv);
     return err;

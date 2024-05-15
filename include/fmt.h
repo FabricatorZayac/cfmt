@@ -29,7 +29,7 @@ typedef enum {
     _format( \
         STREAM, \
         FMT, \
-        NUM_ARGS(__VA_ARGS__) , __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
+        __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
 
 #define print(FMT, ...) format(stdout, FMT, __VA_ARGS__)
 #endif
