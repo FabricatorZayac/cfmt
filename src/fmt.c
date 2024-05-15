@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
@@ -10,7 +11,7 @@
 static fmt_error int_fmt(const void *ctx, FILE *stream);
 static fmt_error double_fmt(const void *ctx, FILE *stream);
 
-static fmt_error vfprint(FILE *stream, const char *format, va_list argv) {
+static fmt_error vformat(FILE *stream, const char *format, va_list argv) {
     // int arg_state = 0;
     fmt_marker_generic arg_state;
     size_t fmt_len = strlen(format);
@@ -55,7 +56,7 @@ static fmt_error vfprint(FILE *stream, const char *format, va_list argv) {
         if (arg_state == GEN_END) {
             return FMT_ERR_NOT_ENOUGH_ARGS;
         }
-        
+
         fmt_error err; 
         fmt_t display;
         switch (arg_state) {
@@ -88,12 +89,22 @@ static fmt_error vfprint(FILE *stream, const char *format, va_list argv) {
     return FMT_OK;
 }
 
-static fmt_error fprint(FILE *stream, const char *fmt, ...) {
+static fmt_error format(FILE *stream, const char *fmt, ...) {
     va_list argv;
     va_start(argv, fmt);
-    fmt_error err = vfprint(stream, fmt, argv);
+    fmt_error err = vformat(stream, fmt, argv);
     va_end(argv);
     return err;
+}
+
+static void format_or_die(FILE *stream, const char *fmt, ...) {
+    va_list argv;
+    va_start(argv, fmt);
+    fmt_error err; 
+
+    if ((err = vformat(stream, fmt, argv))) FMT_REPORT_AND_DIE(err);
+    
+    va_end(argv);
 }
 
 static fmt_error int_fmt(const void *ctx, FILE *stream) {
@@ -158,7 +169,8 @@ static fmt_t fmt_error_display(fmt_error self) {
 }
 
 const fmt_mod fmt = {
-    ._format = fprint,
+    ._format = format,
+    ._format_or_die = format_or_die,
     .Int = int_display,
     .Double = double_display,
     .CStr = cstr_display,
