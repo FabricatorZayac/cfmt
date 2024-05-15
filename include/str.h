@@ -6,18 +6,13 @@
 #include "fmt.h"
 
 typedef struct {
-    size_t begin;
-    size_t end;
-} range_t;
-
-typedef struct {
     char *data;
     size_t len;
 } str_t;
 
 typedef struct {
     str_t (*from_cstr)(char *);
-    str_t (*slice)(str_t, range_t);
+    str_t (*slice)(str_t, size_t, size_t);
     fmt_t (*fmt)(const str_t *);
 } str_mt;
 

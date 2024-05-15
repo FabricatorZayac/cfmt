@@ -8,16 +8,16 @@ static str_t from_cstr(char *cstr) {
     return (str_t) { .data = cstr, .len = strlen(cstr) };
 }
 
-static str_t slice(str_t self, const range_t range) {
+static str_t slice(str_t self, size_t begin, size_t end) {
     return (str_t) {
-        .data = self.data + range.begin,
-        .len = range.end - range.begin,
+        .data = self.data + begin,
+        .len = end - begin,
     };
 }
 
 static fmt_error get_format_string(str_t self, char *fmt_buf) {
     if (sprintf(fmt_buf, "%%.%lus", self.len) < 0) {
-        return FMT_ERR;
+        return FMT_ERR_FPRINTF;
     }
 
     return FMT_OK;
@@ -27,8 +27,9 @@ static fmt_error display(const void *ctx, FILE *stream) {
     const str_t *self = ctx;
 
     char slice_fmt[10] = {0};
-    if (get_format_string(*self, slice_fmt) == FMT_ERR) return FMT_ERR;
-    if (fprintf(stream, slice_fmt, self->data) < 0) return FMT_ERR;
+    fmt_error err;
+    if ((err = get_format_string(*self, slice_fmt))) return err;
+    if (fprintf(stream, slice_fmt, self->data) < 0) return FMT_ERR_FPRINTF;
     return FMT_OK;
 }
 

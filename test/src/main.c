@@ -1,54 +1,41 @@
 #include <stddef.h>
-#include <stdio.h>
-#include <string.h>
 
-#include "typeinfo.h"
-#include "cursed_macros.h"
+#define CFMT_PRINT_MACROS
 #include "fmt.h"
 #include "str.h"
 
-typedef struct {} Allocator_t;
-
-typedef struct {
-    typeinfo_t Self;
-    size_t size;
-    size_t cap;
-    void *data;
-    Allocator_t allocator;
-} ArrayList_t;
-
-typeinfo_t ArrayList(const typeinfo_t T) {
-    return (typeinfo_t) {
-        .size = sizeof(ArrayList_t),
-    };
+void report_error(const char *file, int line, fmt_error err) {
+    (void)fmt.print("{}:{}: error: {}\n", file, line, err);
 }
+#define REPORT(ERR) report_error(__FILE__, __LINE__, ERR)
 
 int main() {
     str_t foo = str.from_cstr("Hello, world!");
-    fmt.print("{}\n", str.fmt(&foo));
-    str_t foo_slice = str.slice(foo, (range_t){3, 10});
-    fmt.print("{}\n", str.fmt(&foo_slice));
+    (void)fmt.print("{}\n", str.fmt(&foo));
+    str_t foo_slice = str.slice(foo, 3, 10);
+    (void)fmt.print("{}\n", str.fmt(&foo_slice));
 
-    fmt_error err = fmt.print("{} | {}\n",
-                              str.fmt(&foo),
-                              str.fmt(&foo_slice));
-    if (err != FMT_OK) {
-        fmt.print("error: "__FILE__":{}\n", fmt.Int(&(int){__LINE__}));
+    fmt_error err;
+    if ((err = fmt.print(
+        "{} | {}\n",
+        str.fmt(&foo),
+        str.fmt(&foo_slice)
+    ))) {
+        REPORT(err);
     }
 
-    err = fmt.print("{} | {} | {}\n",
-                    str.fmt(&foo),
-                    str.fmt(&foo_slice));
-    if (err != FMT_OK) {
-        fmt.print("error: "__FILE__":{}\n", fmt.Int(&(int){__LINE__}));
+    (void)fmt.print("{}\n", 25);
+    (void)fmt.print("{{}}\n");
+
+    if ((err = fmt.print("{}\n"))) {
+        REPORT(err);
     }
 
-    fmt.print("{i}\n", 5);
-    fmt.print("asd\n");
-    fmt.print("{}\n", fmt.Double(&(double){25.1234}));
+    if ((err = fmt.print("}\n"))) {
+        REPORT(err);
+    }
 
-    err = fmt.print("{}\n");
-    if (err != FMT_OK) {
-        fmt.print("error: "__FILE__":{}\n", fmt.Int(&(int){__LINE__}));
+    if ((err = fmt.print("{\n"))) {
+        REPORT(err);
     }
 }

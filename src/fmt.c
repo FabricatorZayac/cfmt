@@ -1,122 +1,104 @@
+#include <assert.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 
 #include "fmt.h"
-#undef print
-#undef fprint
-
-#define SPECIFIER_MAX_LEN 7
 
 static fmt_error int_fmt(const void *ctx, FILE *stream);
 static fmt_error double_fmt(const void *ctx, FILE *stream);
 
-typedef enum {
-    TOKEN_OBJ,
-    TOKEN_INT,
-    TOKEN_FLOAT,
-} fmt_token;
+static fmt_error vfprint(FILE *stream, const char *format, va_list argv) {
+    // int arg_state = 0;
+    fmt_marker_generic arg_state;
+    size_t fmt_len = strlen(format);
+    for (size_t i = 0; i < fmt_len;) {
+        const size_t start_index = i;
 
-typedef struct {
-    size_t pos;
-    int shift;
-    fmt_token type;
-} Token;
-
-Token Token_new(size_t pos, fmt_token type) {
-    Token ret = { .pos = pos, .type = type };
-    switch (type) {
-    case TOKEN_OBJ:
-        ret.shift = 1;
-        break;
-    case TOKEN_INT:
-    case TOKEN_FLOAT:
-        ret.shift = 2;
-        break;
-    }
-    return ret;
-}
-
-static int fmt_parse(const char *fmt, Token *tokens) {
-    int n = 0;
-    bool in_token = false;
-    for (size_t i = 0; i < strlen(fmt); i++) {
-        if (!in_token && fmt[i] == '{') in_token = true;
-        if (in_token) {
-            if (fmt[i + 1] == '}') {
-                in_token = false;
-                tokens[n] = Token_new(i, TOKEN_OBJ);
-                ++n;
-                i += 1;
-            } else if (fmt[i + 1] == 'i' && fmt[i + 2] == '}') {
-                in_token = false;
-                tokens[n] = Token_new(i, TOKEN_INT);
-                ++n;
-                i += 2;
-            } else {
-                return -1; // error sentinel, invalid format string
+        for (; i < fmt_len; i++) {
+            switch (format[i]) {
+                case '{':
+                case '}':
+                    goto _break;
             }
         }
-    }
-    return n;
-}
+        _break:;
 
-static fmt_error vfprint(FILE *stream, const char *fmt, int argc, va_list argv) {
-    Token tokens[argc];
-    int n = fmt_parse(fmt, tokens);
-    if (fmt_parse(fmt, tokens) != argc) return FMT_ERR;
-    if (n == 0) {
-        fputs(fmt, stream);
-        return FMT_OK;
-    }
-    int token_idx = 0;
-    for (size_t i = 0; i < strlen(fmt); i++) {
-        if (tokens[token_idx].pos == i) {
-            i += tokens[token_idx].shift;
-            switch (tokens[token_idx].type) {
-                case TOKEN_OBJ: {
-                    fmt_t arg = va_arg(argv, fmt_t);
-                    if (arg.fmt(arg.ptr, stream) == FMT_ERR) return FMT_ERR;
-                } break;
-                case TOKEN_INT: {
-                    int arg = va_arg(argv, int);
-                    if (int_fmt(&arg, stream)) return FMT_ERR;
-                } break;
-                case TOKEN_FLOAT: {
-                    double arg = va_arg(argv, double);
-                    if (double_fmt(&arg, stream)) return FMT_ERR;
-                } break;
-            }
-            continue;
+        size_t end_index = i;
+        bool unescape_brace = false;
+
+        if (i + 1 < fmt_len && format[i + 1] == format[i]) {
+            unescape_brace = true;
+            end_index += 1;
+            i += 2;
         }
-        fputc(fmt[i], stream);
+
+        if (start_index != end_index) {
+            fwrite(format + start_index, 1, end_index - start_index, stream);
+        }
+
+        if (unescape_brace) continue;
+        if (i >= fmt_len) break;
+
+        if (format[i] == '}') return FMT_ERR_NO_OPENBRACKET;
+        assert(format[i] == '{');
+        i += 1;
+
+        for (; i< fmt_len && format[i] != '}'; i++) {}
+        if (i >= fmt_len) return FMT_ERR_NO_CLOSEBRACKET;
+        assert(format[i] == '}');
+        i += 1;
+
+        arg_state = va_arg(argv, fmt_marker_generic);
+        if (arg_state == GEN_END) {
+            return FMT_ERR_NOT_ENOUGH_ARGS;
+        }
+        
+        fmt_error err; 
+        fmt_t display;
+        switch (arg_state) {
+            case GEN_END:{
+                unreachable();
+            } break;
+            case GEN_INTERFACE:{
+                display = va_arg(argv, fmt_t);
+            } break;
+            case GEN_INT:{
+                int value = va_arg(argv, int);
+                display = fmt.Int(&value);
+            } break;
+            case GEN_DOUBLE:{
+                double value = va_arg(argv, double);
+                display = fmt.Double(&value);
+            } break;
+            case GEN_CSTR:{
+                const char *value = va_arg(argv, char *);
+                display = fmt.CStr(value);
+            } break;
+            case GEN_ERR:{
+                fmt_error value = va_arg(argv, fmt_error);
+                display = fmt.errstr(value);
+            } break;
+        }
+        if ((err = display.fmt(display.ptr, stream))) return err;
     }
 
     return FMT_OK;
 }
 
-static fmt_error fprint(FILE *stream, const char *fmt, int argc, ...) {
+static fmt_error fprint(FILE *stream, const char *fmt, ...) {
     va_list argv;
     va_start(argv, argc);
-    fmt_error err = vfprint(stream, fmt, argc, argv);
-    va_end(argv);
-    return err;
-}
-
-static fmt_error print(const char *fmt, int argc, ...) {
-    va_list argv;
-    va_start(argv, argc);
-    fmt_error err = vfprint(stdout, fmt, argc, argv);
+    fmt_error err = vfprint(stream, fmt, argv);
     va_end(argv);
     return err;
 }
 
 static fmt_error int_fmt(const void *ctx, FILE *stream) {
     const int *self = ctx;
-    if (fprintf(stream, "%d", *self) < 0) return FMT_ERR;
+    if (fprintf(stream, "%d", *self) < 0) return FMT_ERR_FPRINTF;
     return FMT_OK;
 }
 static fmt_t int_display(int *self) {
@@ -128,7 +110,7 @@ static fmt_t int_display(int *self) {
 
 static fmt_error double_fmt(const void *ctx, FILE *stream) {
     const float *self = ctx;
-    if (fprintf(stream, "%G", *self) < 0) return FMT_ERR;
+    if (fprintf(stream, "%G", *self) < 0) return FMT_ERR_FPRINTF;
     return FMT_OK;
 }
 static fmt_t double_display(double *self) {
@@ -140,7 +122,7 @@ static fmt_t double_display(double *self) {
 
 static fmt_error cstr_fmt(const void *ctx, FILE *stream) {
     const char *self = ctx;
-    if (fprintf(stream, "%s", self) < 0) return FMT_ERR; 
+    if (fprintf(stream, "%s", self) < 0) return FMT_ERR_FPRINTF; 
     return FMT_OK;
 }
 static fmt_t cstr_display(const char *self) {
@@ -150,10 +132,35 @@ static fmt_t cstr_display(const char *self) {
     };
 }
 
+static fmt_t fmt_error_display(fmt_error self) {
+    const char *str;
+    switch (self) {
+        case FMT_OK: {
+            str = "OK";
+        } break;
+        case FMT_ERR_NO_OPENBRACKET: {
+            str = "missing opening {";
+        } break;
+        case FMT_ERR_NO_CLOSEBRACKET: {
+            str = "missing closing }";
+        } break;
+        case FMT_ERR_NOT_ENOUGH_ARGS: {
+            str = "too few arguments";
+        } break;
+        case FMT_ERR_FPRINTF: {
+            str = "fprintf error";
+        } break;
+    }
+    return (fmt_t) {
+        .ptr = str,
+        .fmt = cstr_fmt,
+    };
+}
+
 const fmt_mod fmt = {
-    .print = print,
-    .fprint = fprint,
+    ._format = fprint,
     .Int = int_display,
     .Double = double_display,
     .CStr = cstr_display,
+    .errstr = fmt_error_display,
 };
