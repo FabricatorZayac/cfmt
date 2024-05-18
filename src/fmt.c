@@ -97,7 +97,7 @@ static fmt_error _format(FILE *stream, const char *fmt, ...) {
     return err;
 }
 
-static void _format_or_die(FILE *stream, const char *file, int line, const char *fmt, ...) {
+static void _format_or_die(FILE *stream, const char *fmt, const char *file, int line, ...) {
     va_list argv;
     va_start(argv, fmt);
     fmt_error err; 
