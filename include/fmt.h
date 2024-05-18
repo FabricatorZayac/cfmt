@@ -4,10 +4,10 @@
 #include <stdio.h>
 #include "cursed_macros.h"
 
-#define ___ENUM_MIXIN(X) CDR X
+#define ___ENUM_MIXIN(X) CDR X,
 
-// #define GEN_MIXIN \
-//     (str_t, GEN_STR)
+#define GEN_MIXIN \
+    (str_t, GEN_STR)
 
 typedef enum {
     GEN_END,
@@ -32,9 +32,8 @@ FOREACH(___ENUM_MIXIN, GEN_MIXIN)
     const char *: GEN_CSTR,              \
     char *: GEN_CSTR,                    \
     fmt_error: GEN_ERR,                  \
-    fmt_t: GEN_INTERFACE                \
-    )
-    // FOREACH(__UNWRAP_MIXIN, GEN_MIXIN))
+    fmt_t: GEN_INTERFACE,                \
+    FOREACH(__UNWRAP_MIXIN, GEN_MIXIN))
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
@@ -56,7 +55,7 @@ FOREACH(___ENUM_MIXIN, GEN_MIXIN)
  * @description Safe print function
  * @arg FMT format string literal
  * @arg ... stuff you wanna print
- * @return fmt_error [[nodiscard]]
+ * @return fmt_error
  **/
 #define print(FMT, ...) format(stdout, FMT, __VA_ARGS__)
 
@@ -66,7 +65,11 @@ FOREACH(___ENUM_MIXIN, GEN_MIXIN)
 #define printu(FMT, ...) format_or_die(stdout, FMT, __VA_ARGS__)
 #define println(FMT, ...) printu(FMT"\n", __VA_ARGS__)
 
-typedef enum {
+#ifdef __has_c_attribute
+#define NODISCARD [[nodiscard]]
+#endif
+
+typedef enum NODISCARD {
     FMT_OK,
     FMT_ERR_FPRINTF,
     FMT_ERR_FWRITE,
@@ -75,17 +78,15 @@ typedef enum {
     FMT_ERR_NOT_ENOUGH_ARGS,
 } fmt_error;
 
-#ifdef __has_c_attribute
-#define NODISCARD [[nodiscard]]
-#endif
+#undef NODISCARD
 
 typedef struct {
     const void *ptr;
-    NODISCARD fmt_error (*fmt)(const void *ctx, FILE *stream);
+    fmt_error (*fmt)(const void *ctx, FILE *stream);
 } fmt_t;
 
 typedef struct {
-    NODISCARD fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);
+    fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);
     void (*_format_or_die)(FILE *stream, const char *restrict fmt, const char *file, int line, ...);
     fmt_t (*Int)(int *self);
     fmt_t (*Double)(double *self);
@@ -94,7 +95,6 @@ typedef struct {
     fmt_t (*errstr)(fmt_error self);
 } fmt_mod;
 extern const fmt_mod fmt;
-#undef NODISCARD
 
 #define FMT_REPORT(ERR) report_error(__FILE__, __LINE__, ERR)
 #define FMT_REPORT_AND_DIE(ERR) do { \
