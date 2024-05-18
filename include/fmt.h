@@ -10,17 +10,18 @@ typedef enum {
     GEN_DOUBLE,
     GEN_CSTR,
     GEN_ERR,
+    GEN_UNKNOWN,
 } fmt_marker_generic;
 
-#ifdef CFMT_PRINT_MACROS
 #include "cursed_macros.h"
 
 #define _FMT_MARKER(ARG) _Generic((ARG), \
-    int: GEN_INT, \
-    double: GEN_DOUBLE, \
-    const char *: GEN_CSTR, \
-    fmt_error: GEN_ERR, \
-    fmt_t: GEN_INTERFACE)
+    int: GEN_INT,                        \
+    double: GEN_DOUBLE,                  \
+    const char *: GEN_CSTR,              \
+    fmt_error: GEN_ERR,                  \
+    fmt_t: GEN_INTERFACE,                \
+    default: GEN_UNKNOWN)
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
@@ -35,6 +36,7 @@ typedef enum {
     _format_or_die( \
         STREAM, \
         FMT, \
+        __FILE__, __LINE__, \
         __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
 
 /**
@@ -49,7 +51,6 @@ typedef enum {
  * @description Unsafe print function. Same as the safe one, but dies on error
  **/
 #define printu(FMT, ...) format_or_die(stdout, FMT, __VA_ARGS__)
-#endif
 
 typedef enum {
     FMT_OK,
@@ -70,7 +71,7 @@ typedef struct {
 
 typedef struct {
     NODISCARD fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);
-    void (*_format_or_die)(FILE *stream, const char *restrict fmt, ...);
+    void (*_format_or_die)(FILE *stream, const char *restrict fmt, const char* file, int line, ...);
     fmt_t (*Int)(int *self);
     fmt_t (*Double)(double *self);
     fmt_t (*CStr)(const char *self);
@@ -80,7 +81,6 @@ typedef struct {
 #undef NODISCARD
 
 extern const fmt_mod fmt;
-
 
 #define FMT_REPORT(ERR) report_error(__FILE__, __LINE__, ERR)
 #define FMT_REPORT_AND_DIE(ERR) do { \

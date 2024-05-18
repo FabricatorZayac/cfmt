@@ -89,7 +89,7 @@ static fmt_error vformat(FILE *stream, const char *format, va_list argv) {
     return FMT_OK;
 }
 
-static fmt_error format(FILE *stream, const char *fmt, ...) {
+static fmt_error _format(FILE *stream, const char *fmt, ...) {
     va_list argv;
     va_start(argv, fmt);
     fmt_error err = vformat(stream, fmt, argv);
@@ -97,12 +97,14 @@ static fmt_error format(FILE *stream, const char *fmt, ...) {
     return err;
 }
 
-static void format_or_die(FILE *stream, const char *fmt, ...) {
+static void _format_or_die(FILE *stream, const char *file, int line, const char *fmt, ...) {
     va_list argv;
     va_start(argv, fmt);
     fmt_error err; 
 
-    if ((err = vformat(stream, fmt, argv))) FMT_REPORT_AND_DIE(err);
+    if ((err = vformat(stream, fmt, argv))) {
+        report_error(file, line, err);
+    }
     
     va_end(argv);
 }
@@ -169,8 +171,8 @@ static fmt_t fmt_error_display(fmt_error self) {
 }
 
 const fmt_mod fmt = {
-    ._format = format,
-    ._format_or_die = format_or_die,
+    ._format = _format,
+    ._format_or_die = _format_or_die,
     .Int = int_display,
     .Double = double_display,
     .CStr = cstr_display,
