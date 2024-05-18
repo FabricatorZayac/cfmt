@@ -51,6 +51,7 @@ typedef enum {
  * @description Unsafe print function. Same as the safe one, but dies on error
  **/
 #define printu(FMT, ...) format_or_die(stdout, FMT, __VA_ARGS__)
+#define println(FMT, ...) printu(FMT"\n", __VA_ARGS__)
 
 typedef enum {
     FMT_OK,
@@ -58,6 +59,7 @@ typedef enum {
     FMT_ERR_NO_OPENBRACKET,
     FMT_ERR_NO_CLOSEBRACKET,
     FMT_ERR_NOT_ENOUGH_ARGS,
+    FMT_ERR_UNSUPPORTED_TYPE,
 } fmt_error;
 
 #ifdef __has_c_attribute

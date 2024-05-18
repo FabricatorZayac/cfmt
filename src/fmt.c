@@ -61,7 +61,9 @@ static fmt_error vformat(FILE *stream, const char *format, va_list argv) {
         fmt_t display;
         switch (arg_state) {
             case GEN_END:{
+#ifdef unreachable
                 unreachable();
+#endif
             } break;
             case GEN_INTERFACE:{
                 display = va_arg(argv, fmt_t);
@@ -82,6 +84,9 @@ static fmt_error vformat(FILE *stream, const char *format, va_list argv) {
                 fmt_error value = va_arg(argv, fmt_error);
                 display = fmt.errstr(value);
             } break;
+            case GEN_UNKNOWN:{
+                FMT_REPORT_AND_DIE(FMT_ERR_UNSUPPORTED_TYPE);
+            } break;
         }
         if ((err = display.fmt(display.ptr, stream))) return err;
     }
@@ -99,7 +104,7 @@ static fmt_error _format(FILE *stream, const char *fmt, ...) {
 
 static void _format_or_die(FILE *stream, const char *fmt, const char *file, int line, ...) {
     va_list argv;
-    va_start(argv, fmt);
+    va_start(argv, line);
     fmt_error err; 
 
     if ((err = vformat(stream, fmt, argv))) {
@@ -162,6 +167,9 @@ static fmt_t fmt_error_display(fmt_error self) {
         } break;
         case FMT_ERR_FPRINTF: {
             str = "fprintf error";
+        } break;
+        case FMT_ERR_UNSUPPORTED_TYPE: {
+            str = "unsupported type";
         } break;
     }
     return (fmt_t) {
