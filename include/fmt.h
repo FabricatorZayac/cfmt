@@ -42,7 +42,9 @@ FOREACH(___ENUM_MIXIN, GEN_MIXIN)
     _format(                     \
         STREAM,                  \
         FMT"",                   \
-        __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
+        __VA_OPT__(              \
+        FOREACH(_FMT_WITH_MARKER, __VA_ARGS__) \
+    ) 0)
 
 #define format_or_die(STREAM, FMT, ...) \
     _format_or_die(                     \
