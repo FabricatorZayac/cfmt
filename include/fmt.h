@@ -4,32 +4,26 @@
 #include <stdio.h>
 #include "cursed_macros.h"
 
-#define ___ENUM() typedef enum {
-#define ___ENUM_END() } fmt_marker_generic;
-#define ___ENUM_DEFAULT_IMPL() \
-    GEN_END, \
-    GEN_INTERFACE, \
-    GEN_INT, \
-    GEN_DOUBLE, \
-    GEN_CSTR, \
-    GEN_ERR, \
-    GEN_BOOL,
-
 #define ___ENUM_MIXIN(X) CDR X
 
 // #define GEN_MIXIN \
-//     ((str_t, GEN_STR))
+//     (str_t, GEN_STR)
 
-___ENUM()
-___ENUM_DEFAULT_IMPL()
+typedef enum {
+    GEN_END,
+    GEN_INTERFACE,
+    GEN_INT,
+    GEN_DOUBLE,
+    GEN_CSTR,
+    GEN_ERR,
+    GEN_BOOL,
 #ifdef GEN_MIXIN
 FOREACH(___ENUM_MIXIN, GEN_MIXIN)
 #endif
-___ENUM_END()
+} fmt_marker_generic;
 
 #define _UNWRAP_MIXIN(T, ENUM) T: ENUM,
 #define __UNWRAP_MIXIN(X) _UNWRAP_MIXIN X
-#define _MARKERS(...) FOREACH(__UNWRAP_MIXIN, __VA_ARGS__)
 
 #define _FMT_MARKER(ARG) _Generic((ARG), \
     bool: GEN_BOOL,                      \
@@ -38,8 +32,9 @@ ___ENUM_END()
     const char *: GEN_CSTR,              \
     char *: GEN_CSTR,                    \
     fmt_error: GEN_ERR,                  \
-    fmt_t: GEN_INTERFACE,                \
-    _MARKERS(GEN_MIXIN))
+    fmt_t: GEN_INTERFACE                \
+    )
+    // FOREACH(__UNWRAP_MIXIN, GEN_MIXIN))
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
@@ -54,6 +49,7 @@ ___ENUM_END()
     _format_or_die(                     \
         STREAM,                         \
         FMT"",                          \
+        __FILE__, __LINE__,             \
         __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
 
 /**
@@ -90,7 +86,7 @@ typedef struct {
 
 typedef struct {
     NODISCARD fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);
-    void (*_format_or_die)(FILE *stream, const char *restrict fmt, ...);
+    void (*_format_or_die)(FILE *stream, const char *restrict fmt, const char *file, int line, ...);
     fmt_t (*Int)(int *self);
     fmt_t (*Double)(double *self);
     fmt_t (*CStr)(const char *self);
@@ -236,12 +232,15 @@ fmt_error INTERNAL(format)(FILE *stream, const char *fmt, ...) {
     return err;
 }
 
-void INTERNAL(format_or_die)(FILE *stream, const char *fmt, ...) {
+void INTERNAL(format_or_die)(FILE *stream, const char *fmt, const char *file, int line, ...) {
     va_list argv;
     va_start(argv, fmt);
     fmt_error err; 
 
-    if ((err = INTERNAL(vformat)(stream, fmt, argv))) FMT_REPORT_AND_DIE(err);
+    if ((err = INTERNAL(vformat)(stream, fmt, argv))) {
+        report_error(file, line, err);
+        exit(err);
+    }
 
     va_end(argv);
 }

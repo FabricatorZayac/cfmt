@@ -1,9 +1,11 @@
 #include "cursed_macros.h"
 #include <stddef.h>
 
-#define GEN_MIXIN \
-    (str_t, GEN_STR), \
-    (float, GEN_FLOAT)
+// #define GEN_MIXIN \
+//     (str_t, GEN_STR), \
+//     (float, GEN_FLOAT),
+
+#define GEN_MIXIN
 
 #include "fmt.h"
 
@@ -21,7 +23,8 @@
 
 int main() {
     str_t foo = str.from_cstr("Hello, world!");
-    fmt.println("{}", foo);
+    // fmt.println("{}", foo);
+    fmt.println("{}", str.fmt(&foo));
     str_t foo_slice = str.slice(foo, 3, 10);
     fmt.println("{}", foo_slice);
 
