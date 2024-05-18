@@ -84,9 +84,6 @@ static fmt_error vformat(FILE *stream, const char *format, va_list argv) {
                 fmt_error value = va_arg(argv, fmt_error);
                 display = fmt.errstr(value);
             } break;
-            case GEN_UNKNOWN:{
-                FMT_REPORT_AND_DIE(FMT_ERR_UNSUPPORTED_TYPE);
-            } break;
         }
         if ((err = display.fmt(display.ptr, stream))) return err;
     }
@@ -109,6 +106,7 @@ static void _format_or_die(FILE *stream, const char *fmt, const char *file, int 
 
     if ((err = vformat(stream, fmt, argv))) {
         report_error(file, line, err);
+        exit(err);
     }
     
     va_end(argv);

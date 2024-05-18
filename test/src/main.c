@@ -25,4 +25,6 @@ int main() {
     if ((err = fmt.print("{\n"))) {
         FMT_REPORT(err);
     }
+
+    // fmt.println("{}", foo);
 }

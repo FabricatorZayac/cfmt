@@ -10,7 +10,6 @@ typedef enum {
     GEN_DOUBLE,
     GEN_CSTR,
     GEN_ERR,
-    GEN_UNKNOWN,
 } fmt_marker_generic;
 
 #include "cursed_macros.h"
@@ -20,8 +19,7 @@ typedef enum {
     double: GEN_DOUBLE,                  \
     const char *: GEN_CSTR,              \
     fmt_error: GEN_ERR,                  \
-    fmt_t: GEN_INTERFACE,                \
-    default: GEN_UNKNOWN)
+    fmt_t: GEN_INTERFACE)
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
