@@ -15,21 +15,14 @@ static str_t slice(str_t self, size_t begin, size_t end) {
     };
 }
 
-static fmt_error get_format_string(str_t self, char *fmt_buf) {
-    if (sprintf(fmt_buf, "%%.%lus", self.len) < 0) {
-        return FMT_ERR_FPRINTF;
-    }
-
-    return FMT_OK;
-}
-
 static fmt_error display(const void *ctx, FILE *stream) {
     const str_t *self = ctx;
-
-    char slice_fmt[10] = {0};
-    fmt_error err;
-    if ((err = get_format_string(*self, slice_fmt))) return err;
-    if (fprintf(stream, slice_fmt, self->data) < 0) return FMT_ERR_FPRINTF;
+    if (fwrite(
+            self->data,
+            self->len,
+            1,
+            stream
+        ) != 1) return FMT_ERR_FWRITE;
     return FMT_OK;
 }
 
