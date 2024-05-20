@@ -1,30 +1,18 @@
-#include "cursed_macros.h"
 #include <stddef.h>
 
-// #define GEN_MIXIN \
-//     (str_t, GEN_STR), \
-//     (float, GEN_FLOAT),
-
-#include "fmt.h"
+#define GEN_MIXIN \
+    fmt_mixin(str_t, GEN_STR, str.fmt)
 
 #include "str.h"
 
-#define GEN_MIXIN_IMPL(T, GEN, F) \
-    case GEN: { \
-        T value = va_arg(argv, T); \
-        display = F(&value); \
-    } break;
-
-#define GEN_MIXIN_IMPLEMENTATION \
-    GEN_MIXIN_IMPL(str_t, GEN_STR, str.fmt)
-
 #define CFMT_IMPLEMENTATION
 #include "fmt.h"
+#undef CFMT_IMPLEMENTATION
 
 int main() {
     str_t foo = str.from_cstr("Hello, world!");
-    // fmt.println("{}", foo);
-    fmt.println("{}", str.fmt(&foo));
+    fmt.println("{}", foo);
+    fmt.println("{} -- interface", str.fmt(&foo));
     str_t foo_slice = str.slice(foo, 3, 10);
     fmt.println("{}", foo_slice);
 

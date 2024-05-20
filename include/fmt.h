@@ -4,10 +4,9 @@
 #include <stdio.h>
 #include "cursed_macros.h"
 
-#define ___ENUM_MIXIN(X) CDR X,
-
-#define GEN_MIXIN \
-    (str_t, GEN_STR)
+// #define GEN_MIXIN \
+//     X(str_t, GEN_STR)
+//
 
 typedef enum {
     GEN_END,
@@ -18,22 +17,23 @@ typedef enum {
     GEN_ERR,
     GEN_BOOL,
 #ifdef GEN_MIXIN
-FOREACH(___ENUM_MIXIN, GEN_MIXIN)
+#define fmt_mixin(T, GEN, F) GEN,
+    GEN_MIXIN
+#undef fmt_mixin
 #endif
 } fmt_marker_generic;
 
-#define _UNWRAP_MIXIN(T, ENUM) T: ENUM,
-#define __UNWRAP_MIXIN(X) _UNWRAP_MIXIN X
+#define fmt_mixin(T, GEN, F) T: GEN,
 
 #define _FMT_MARKER(ARG) _Generic((ARG), \
+    GEN_MIXIN                            \
     bool: GEN_BOOL,                      \
     int: GEN_INT,                        \
     double: GEN_DOUBLE,                  \
     const char *: GEN_CSTR,              \
     char *: GEN_CSTR,                    \
     fmt_error: GEN_ERR,                  \
-    fmt_t: GEN_INTERFACE,                \
-    FOREACH(__UNWRAP_MIXIN, GEN_MIXIN))
+    fmt_t: GEN_INTERFACE)
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
@@ -215,9 +215,16 @@ fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
                 bool value = va_arg(argv, int);
                 display = fmt.Bool(value);
             } break;
-#ifdef GEN_MIXIN_IMPLEMENTATION 
-        GEN_MIXIN_IMPLEMENTATION
-#endif
+#undef fmt_mixin
+#define fmt_mixin(T, GEN, F) \
+            case GEN: { \
+                T value = va_arg(argv, T); \
+                display = F(&value); \
+            } break;
+            GEN_MIXIN
+#undef fmt_mixin
+// set it back
+#define fmt_mixin(T, GEN, F) T: GEN,
         }
         fmt_error err; 
         if ((err = display.fmt(display.ptr, stream))) return err;
