@@ -1,6 +1,7 @@
 #ifndef FMT_INCLUDE_FABRICATORZAYAC_H
 #define FMT_INCLUDE_FABRICATORZAYAC_H
 
+#include <stdbool.h>
 #include <stdio.h>
 #include "cursed_macros.h"
 
@@ -84,8 +85,6 @@ typedef struct {
     const void *ptr;
     fmt_error (*fmt)(const void *ctx, FILE *stream);
 } fmt_t;
-
-#include <stdbool.h>
 
 typedef struct {
     fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);

@@ -7,12 +7,11 @@
 
 #define CFMT_IMPLEMENTATION
 #include "fmt.h"
-#undef CFMT_IMPLEMENTATION
 
 int main() {
     str_t foo = str.from_cstr("Hello, world!");
-    fmt.println("{}", foo);
     fmt.println("{} -- interface", str.fmt(&foo));
+    fmt.println("{}", foo);
     str_t foo_slice = str.slice(foo, 3, 10);
     fmt.println("{}", foo_slice);
 
