@@ -245,7 +245,7 @@ void INTERNAL(format_or_die)(FILE *stream, const char *fmt, const char *file, in
     fmt_error err; 
 
     if ((err = INTERNAL(vformat)(stream, fmt, argv))) {
-        report_error(file, line, err);
+        INTERNAL(report_error)(file, line, err);
         exit(err);
     }
 
