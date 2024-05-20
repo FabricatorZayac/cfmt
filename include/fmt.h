@@ -95,20 +95,19 @@ typedef struct {
     fmt_t (*CStr)(const char *self);
     fmt_t (*Bool)(bool self);
     fmt_t (*errstr)(fmt_error self);
+    void (*report_error)(const char *file, int line, fmt_error err);
 } fmt_mod;
 extern const fmt_mod fmt;
 
-#define FMT_REPORT(ERR) report_error(__FILE__, __LINE__, ERR)
+#define FMT_REPORT(ERR) fmt.report_error(__FILE__, __LINE__, ERR)
 #define FMT_REPORT_AND_DIE(ERR) do { \
     FMT_REPORT(ERR);                 \
     exit(ERR);                       \
 } while (0)
 
-extern void report_error(const char *file, int line, fmt_error err);
-
 #endif // !FMT_INCLUDE_FABRICATORZAYAC_H
 
-// #define CFMT_IMPLEMENTATION // NOTE: For lsp purposes. Comment this line before building
+
 #ifdef CFMT_IMPLEMENTATION
 
 #include <assert.h>
@@ -121,7 +120,7 @@ extern void report_error(const char *file, int line, fmt_error err);
 
 #define INTERNAL(FN) ___internal_cfmt_##FN
 
-void report_error(const char *file, int line, fmt_error err) {
+void INTERNAL(report_error)(const char *file, int line, fmt_error err) {
     (void)fmt._format(
         stderr,
         "{}:{}: error: {}\n",
@@ -337,6 +336,7 @@ const fmt_mod fmt = {
     .CStr = INTERNAL(cstr_display),
     .Bool = INTERNAL(bool_display),
     .errstr = INTERNAL(fmt_error_display),
+    .report_error = INTERNAL(report_error),
 };
 
 #undef INTERNAL
