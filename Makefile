@@ -5,7 +5,7 @@
 # @version 0.1
 
 CC           := clang
-CC_STANDARD  := c11
+CC_STANDARD  := c2x
 RM           := rm -f
 RMDIR        := rm -rf
 MKDIR        := mkdir

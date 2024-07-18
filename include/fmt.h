@@ -68,6 +68,8 @@ typedef enum {
 
 #ifdef __has_c_attribute
 #define NODISCARD [[nodiscard]]
+#else
+#define NODISCARD
 #endif
 
 typedef enum NODISCARD {
