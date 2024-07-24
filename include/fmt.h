@@ -5,51 +5,53 @@
 #include <stdio.h>
 #include "cursed_macros.h"
 
-typedef enum {
-    GEN_END,
-    GEN_INTERFACE,
-    GEN_INT,
-    GEN_DOUBLE,
-    GEN_CSTR,
-    GEN_ERR,
-    GEN_BOOL,
-#ifdef GEN_MIXIN
-#define fmt_mixin(T, GEN, F) GEN,
-    GEN_MIXIN
-#undef fmt_mixin
-#endif
-} fmt_marker_generic;
+#define FMT_TYPE_END        0
+#define FMT_TYPE_DYNAMIC    1
+#define FMT_TYPE_INT        2
+#define FMT_TYPE_DOUBLE     3
+#define FMT_TYPE_CSTR       4
+#define FMT_TYPE_ERR        5
+#define FMT_TYPE_BOOL       6
+#define FMT_TYPES           7
 
 #include "cursed_macros.h"
 
-#define fmt_mixin(T, GEN, F) T: GEN,
+#ifdef FMT_INCLUDE_CONFIG_H
+#include "fmt_config.h"
+#endif
+
+#ifndef FMT_MIXIN
+#define FMT_MIXIN
+#endif
+
+#define fmt_mixin(T, TYPEID, FN) T: TYPEID,
 
 #define _FMT_MARKER(ARG) _Generic((ARG), \
-    GEN_MIXIN                            \
-    bool: GEN_BOOL,                      \
-    int: GEN_INT,                        \
-    double: GEN_DOUBLE,                  \
-    const char *: GEN_CSTR,              \
-    char *: GEN_CSTR,                    \
-    fmt_t: GEN_INTERFACE)
+    FMT_MIXIN                            \
+    bool: FMT_TYPE_BOOL,                 \
+    int: FMT_TYPE_INT,                   \
+    double: FMT_TYPE_DOUBLE,             \
+    char *: FMT_TYPE_CSTR,               \
+    fmt_t: FMT_TYPE_DYNAMIC)
 
 #define _FMT_WITH_MARKER(ARG) _FMT_MARKER(ARG), ARG,
 
-// Add markers to argc
+// Add type markers to argc
 #define format(STREAM, FMT, ...) \
     _format(                     \
         STREAM,                  \
         FMT"",                   \
         __VA_OPT__(              \
         FOREACH(_FMT_WITH_MARKER, __VA_ARGS__) \
-    ) 0)
+    ) FMT_TYPE_END)
 
 #define format_or_die(STREAM, FMT, ...) \
     _format_or_die(                     \
         STREAM,                         \
         FMT"",                          \
         __FILE__, __LINE__,             \
-        __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__)) 0)
+        __VA_OPT__(FOREACH(_FMT_WITH_MARKER, __VA_ARGS__) \
+    ) FMT_TYPE_END)
 
 /**
  * @description Safe print function
@@ -65,9 +67,19 @@ typedef enum {
 #define printu(FMT, ...) format_or_die(stdout, FMT, __VA_ARGS__)
 #define println(FMT, ...) printu(FMT"\n", __VA_ARGS__)
 
+#define report(ERR) report_error(__FILE__, __LINE__, ERR)
+#define FMT_REPORT_AND_DIE(ERR) do { \
+    fmt.report(ERR);                 \
+    exit(ERR);                       \
+} while (0)
+
+#define DISPLAY(T) \
+    fmt_error T##_display(const T *, FILE *); \
+    fmt_t T##_fmt(const T *self) { return (fmt_t) { .ptr = self, .fmt = (fmt_fn)T##_display }; } \
+    fmt_error T##_display
 
 #ifdef __has_c_attribute
-#define NODISCARD [[nodiscard]]
+#define NODISCARD [[nodiscard("Could contain error code, which should be handled")]]
 #else
 #define NODISCARD
 #endif
@@ -83,9 +95,10 @@ typedef enum NODISCARD {
 
 #undef NODISCARD
 
+typedef fmt_error (*fmt_fn)(const void *ctx, FILE *stream);
 typedef struct {
     const void *ptr;
-    fmt_error (*fmt)(const void *ctx, FILE *stream);
+    fmt_fn fmt;
 } fmt_t;
 
 typedef struct {
@@ -100,15 +113,9 @@ typedef struct {
 } fmt_mod;
 extern const fmt_mod fmt;
 
-#define FMT_REPORT(ERR) fmt.report_error(__FILE__, __LINE__, ERR)
-#define FMT_REPORT_AND_DIE(ERR) do { \
-    FMT_REPORT(ERR);                 \
-    exit(ERR);                       \
-} while (0)
-
 #endif // !FMT_INCLUDE_FABRICATORZAYAC_H
 
-
+// #define CFMT_IMPLEMENTATION
 #ifdef CFMT_IMPLEMENTATION
 
 #include <assert.h>
@@ -126,17 +133,17 @@ void INTERNAL(report_error)(const char *file, int line, fmt_error err) {
         stderr,
         "{}:{}: error: {}\n",
         // "{}:{}: \033[31;1;1merror\033[0m: {}\n",
-        GEN_CSTR, file,
-        GEN_INT, line,
-        GEN_ERR, err,
-        GEN_END
+        FMT_TYPE_CSTR, file,
+        FMT_TYPE_INT, line,
+        FMT_TYPE_ERR, err,
+        FMT_TYPE_END
     );
 }
 
 
 fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
     // int arg_state = 0;
-    fmt_marker_generic arg_state;
+    int arg_typeid;
     size_t fmt_len = strlen(format);
     for (size_t i = 0; i < fmt_len;) {
         const size_t start_index = i;
@@ -180,51 +187,51 @@ fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
         assert(format[i] == '}');
         i += 1;
 
-        arg_state = va_arg(argv, fmt_marker_generic);
-        if (arg_state == GEN_END) {
+        arg_typeid = va_arg(argv, int);
+        if (arg_typeid == FMT_TYPE_END) {
             return FMT_ERR_NOT_ENOUGH_ARGS;
         }
 
         fmt_t display;
-        switch (arg_state) {
-            case GEN_END:{
+        switch (arg_typeid) {
+            case FMT_TYPE_END:{
 #ifdef unreachable
                 unreachable();
 #endif
             } break;
-            case GEN_INTERFACE:{
+            case FMT_TYPE_DYNAMIC:{
                 display = va_arg(argv, fmt_t);
             } break;
-            case GEN_INT:{
+            case FMT_TYPE_INT:{
                 int value = va_arg(argv, int);
                 display = fmt.Int(&value);
             } break;
-            case GEN_DOUBLE:{
+            case FMT_TYPE_DOUBLE:{
                 double value = va_arg(argv, double);
                 display = fmt.Double(&value);
             } break;
-            case GEN_CSTR:{
+            case FMT_TYPE_CSTR:{
                 const char *value = va_arg(argv, char *);
                 display = fmt.CStr(value);
             } break;
-            case GEN_ERR:{
+            case FMT_TYPE_ERR:{
                 fmt_error value = va_arg(argv, fmt_error);
                 display = fmt.errstr(value);
             } break;
-            case GEN_BOOL: {
+            case FMT_TYPE_BOOL: {
                 bool value = va_arg(argv, int);
                 display = fmt.Bool(value);
             } break;
 #undef fmt_mixin
-#define fmt_mixin(T, GEN, F) \
-            case GEN: { \
+#define fmt_mixin(T, TYPEID, FN) \
+            case TYPEID: { \
                 T value = va_arg(argv, T); \
-                display = F(&value); \
+                display = FN(&value); \
             } break;
-            GEN_MIXIN
+            FMT_MIXIN
 #undef fmt_mixin
 // set it back
-#define fmt_mixin(T, GEN, F) T: GEN,
+#define fmt_mixin(T, TYPEID, FN) T: TYPEID,
         }
         fmt_error err; 
         if ((err = display.fmt(display.ptr, stream))) return err;

@@ -1,12 +1,23 @@
-#include <stddef.h>
+#include <stdint.h>
 
-#define GEN_MIXIN \
-    fmt_mixin(str_t, GEN_STR, str.fmt)
+#define FMT_INCLUDE_CONFIG_H
+#include "fmt.h"
 
 #include "str.h"
 
-#define CFMT_IMPLEMENTATION
-#include "fmt.h"
+typedef struct {
+    uint8_t r;
+    uint8_t g;
+    uint8_t b;
+} RGB;
+
+DISPLAY(RGB)(const RGB *self, FILE *stream) {
+    return fmt.format(
+        stream,
+        "RGB {{ r: {}, g: {}, b: {} }}",
+        (int)self->r, (int)self->g, (int)self->b
+    );
+}
 
 int main() {
     str_t foo = str.from_cstr("Hello, world!");
@@ -22,16 +33,21 @@ int main() {
     fmt.println("{{}}");
     fmt.println("{} != {}", true, false);
 
+    fmt.println("{}", ((RGB){ .r = 5, .g = 255, .b = 8 }));
+
     fmt_error err;
     if ((err = fmt.print("{}\n"))) {
-        FMT_REPORT(err);
+        fmt.report(err);
     }
 
     if ((err = fmt.print("}\n"))) {
-        FMT_REPORT(err);
+        fmt.report(err);
     }
 
     if ((err = fmt.print("{\n"))) {
-        FMT_REPORT(err);
+        fmt.report(err);
     }
 }
+
+#define CFMT_IMPLEMENTATION
+#include "fmt.h"

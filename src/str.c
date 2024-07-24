@@ -15,26 +15,19 @@ static str_t slice(str_t self, size_t begin, size_t end) {
     };
 }
 
-static fmt_error display(const void *ctx, FILE *stream) {
-    const str_t *self = ctx;
-    if (fwrite(
-            self->data,
-            self->len,
-            1,
-            stream
-        ) != 1) return FMT_ERR_FWRITE;
-    return FMT_OK;
-}
-
-static fmt_t str_fmt(const str_t *self) {
-    return (fmt_t) {
-        .ptr = self,
-        .fmt = display,
-    };
+DISPLAY(str_t)(const str_t *self, FILE *stream) {
+    return fwrite(
+        self->data,
+        self->len,
+        1,
+        stream
+    ) == 1
+    ? FMT_OK
+    : FMT_ERR_FWRITE;
 }
 
 const str_mt str = {
     .from_cstr = from_cstr,
     .slice = slice,
-    .fmt = str_fmt,
+    .fmt = str_t_fmt,
 };

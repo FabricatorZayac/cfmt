@@ -22,6 +22,7 @@ LIB          := $(TARGET)/lib.a
 
 TESTDIR      := test
 TESTSRC      := $(TESTDIR)/src
+TESTINCLUDE  := $(TESTDIR)/include
 TESTOBJ      := $(TESTDIR)/obj
 TESTBIN      := $(TESTDIR)/bin
 
@@ -32,6 +33,7 @@ TESTS        := $(patsubst $(TESTOBJ)/%.o, $(TESTBIN)/%, $(TESTOBJS))
 LDFLAGS      :=
 CFLAGS       := -I$(INCLUDE) -std=$(CC_STANDARD) -Wall -Wextra
 DEBUGFLAGS   := -O0 -ggdb
+TESTFLAGS    := -I$(TESTINCLUDE)
 
 define execute
 $(1)
@@ -49,6 +51,7 @@ $(LIB): $(OBJS) | $(TARGET)
 $(OBJ)/%.o: $(SRC)/%.c | $(OBJ)
 	$(CC) $(CFLAGS) -c $^ -o $@
 
+test: CFLAGS := $(CFLAGS) $(TESTFLAGS)
 test: $(LIB) $(TESTS)
 	$(foreach x, $(TESTS), $(call execute, ./$(x)))
 
