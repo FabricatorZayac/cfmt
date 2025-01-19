@@ -5,17 +5,6 @@
 #include <stdio.h>
 #include "cursed_macros.h"
 
-#define FMT_TYPE_END        0
-#define FMT_TYPE_DYNAMIC    1
-#define FMT_TYPE_INT        2
-#define FMT_TYPE_DOUBLE     3
-#define FMT_TYPE_CSTR       4
-#define FMT_TYPE_ERR        5
-#define FMT_TYPE_BOOL       6
-#define FMT_TYPES           7
-
-#include "cursed_macros.h"
-
 #ifdef FMT_INCLUDE_CONFIG_H
 #include "fmt_config.h"
 #endif
@@ -24,13 +13,15 @@
 #define FMT_MIXIN
 #endif
 
-#define fmt_mixin(T, TYPEID, FN) T: TYPEID,
+#ifndef FMTDEF
+#define FMTDEF static inline
+#endif
 
 #define _FMT_MARKER(ARG) _Generic((ARG), \
     FMT_MIXIN                            \
     bool: FMT_TYPE_BOOL,                 \
-    int: FMT_TYPE_INT,                   \
-    double: FMT_TYPE_DOUBLE,             \
+    int: FMT_TYPE_int,                   \
+    double: FMT_TYPE_double,             \
     char *: FMT_TYPE_CSTR,               \
     fmt_t: FMT_TYPE_DYNAMIC)
 
@@ -74,15 +65,41 @@
 } while (0)
 
 #define DISPLAY(T) \
-    fmt_error T##_display(const T *, FILE *); \
-    fmt_t T##_fmt(const T *self) { return (fmt_t) { .ptr = self, .fmt = (fmt_fn)T##_display }; } \
-    fmt_error T##_display
+    FMTDEF fmt_error T##_display(const T *, FILE *); \
+    FMTDEF fmt_t T##_fmt(const T *self) { return (fmt_t) { .ptr = self, .fmt = (fmt_fn)T##_display }; } \
+    FMTDEF fmt_error T##_display
 
 #ifdef __has_c_attribute
 #define NODISCARD [[nodiscard("Could contain error code, which should be handled")]]
 #else
 #define NODISCARD
 #endif
+
+#define BUILTIN_TYPES \
+    fmt_mixin(int)    \
+    fmt_mixin(double)
+
+#define ___FMT_MIXIN_OVERLOAD(_1, _2, NAME, ...) NAME
+#define fmt_mixin(...) \
+    ___FMT_MIXIN_OVERLOAD(__VA_ARGS__, ___fmt_mixin2, ___fmt_mixin1)(__VA_ARGS__)
+typedef enum {
+    FMT_TYPE_END,
+    FMT_TYPE_DYNAMIC,
+    FMT_TYPE_CSTR,
+    FMT_TYPE_ERR,
+    FMT_TYPE_BOOL,
+#undef ___fmt_mixin1
+#undef ___fmt_mixin2
+#define ___fmt_mixin1(T) FMT_TYPE_##T,
+#define ___fmt_mixin2(T, _) FMT_TYPE_##T,
+    BUILTIN_TYPES
+    FMT_MIXIN
+    FMT_TYPES,
+} fmt_type_t;
+#undef ___fmt_mixin1
+#undef ___fmt_mixin2
+#define ___fmt_mixin1(T) T: FMT_TYPE_##T,
+#define ___fmt_mixin2(T, _) T: FMT_TYPE_##T,
 
 typedef enum NODISCARD {
     FMT_OK,
@@ -104,8 +121,8 @@ typedef struct {
 typedef struct {
     fmt_error (*_format)(FILE *stream, const char *restrict fmt, ...);
     void (*_format_or_die)(FILE *stream, const char *restrict fmt, const char *file, int line, ...);
-    fmt_t (*Int)(int *self);
-    fmt_t (*Double)(double *self);
+    fmt_t (*Int)(const int *self);
+    fmt_t (*Double)(const double *self);
     fmt_t (*CStr)(const char *self);
     fmt_t (*Bool)(bool self);
     fmt_t (*errstr)(fmt_error self);
@@ -128,20 +145,81 @@ extern const fmt_mod fmt;
 
 #define INTERNAL(FN) ___internal_cfmt_##FN
 
-void INTERNAL(report_error)(const char *file, int line, fmt_error err) {
+FMTDEF void INTERNAL(report_error)(const char *file, int line, fmt_error err) {
     (void)fmt._format(
         stderr,
         "{}:{}: error: {}\n",
         // "{}:{}: \033[31;1;1merror\033[0m: {}\n",
         FMT_TYPE_CSTR, file,
-        FMT_TYPE_INT, line,
+        FMT_TYPE_int, line,
         FMT_TYPE_ERR, err,
         FMT_TYPE_END
     );
 }
 
+DISPLAY(int)(const int *self, FILE *stream) {
+    if (fprintf(stream, "%d", *self) < 0) return FMT_ERR_FPRINTF;
+    return FMT_OK;
+}
+DISPLAY(double)(const double *self, FILE *stream) {
+    if (fprintf(stream, "%G", *self) < 0) return FMT_ERR_FPRINTF;
+    return FMT_OK;
+}
 
-fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
+// NOTE: Char pointer might be not a string.
+// TODO: Implement format specifiers for arrays
+FMTDEF fmt_error INTERNAL(cstr_fmt)(const void *ctx, FILE *stream) {
+    if (fwrite(
+            ctx,
+            strlen(ctx),
+            1,
+            stream
+        ) != 1) return FMT_ERR_FWRITE;
+    return FMT_OK;
+}
+FMTDEF fmt_t INTERNAL(cstr_display)(const char *self) {
+    return (fmt_t){
+        .ptr = self,
+        .fmt = INTERNAL(cstr_fmt),
+    };
+}
+
+FMTDEF fmt_t INTERNAL(bool_display)(bool self) {
+    return (fmt_t) {
+        .ptr = self ? "true" : "false",
+        .fmt = INTERNAL(cstr_fmt),
+    };
+}
+
+FMTDEF fmt_t INTERNAL(fmt_error_display)(fmt_error self) {
+    const char *str;
+    switch (self) {
+        case FMT_OK: {
+            str = "OK";
+        } break;
+        case FMT_ERR_NO_OPENBRACKET: {
+            str = "missing opening {";
+        } break;
+        case FMT_ERR_NO_CLOSEBRACKET: {
+            str = "missing closing }";
+        } break;
+        case FMT_ERR_NOT_ENOUGH_ARGS: {
+            str = "too few arguments";
+        } break;
+        case FMT_ERR_FPRINTF: {
+            str = "fprintf error";
+        } break;
+        case FMT_ERR_FWRITE: {
+            str = "fwrite error";
+        } break;
+    }
+    return (fmt_t) {
+        .ptr = str,
+        .fmt = INTERNAL(cstr_fmt),
+    };
+}
+
+FMTDEF fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
     // int arg_state = 0;
     int arg_typeid;
     size_t fmt_len = strlen(format);
@@ -202,14 +280,6 @@ fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
             case FMT_TYPE_DYNAMIC:{
                 display = va_arg(argv, fmt_t);
             } break;
-            case FMT_TYPE_INT:{
-                int value = va_arg(argv, int);
-                display = fmt.Int(&value);
-            } break;
-            case FMT_TYPE_DOUBLE:{
-                double value = va_arg(argv, double);
-                display = fmt.Double(&value);
-            } break;
             case FMT_TYPE_CSTR:{
                 const char *value = va_arg(argv, char *);
                 display = fmt.CStr(value);
@@ -222,25 +292,35 @@ fmt_error INTERNAL(vformat)(FILE *stream, const char *format, va_list argv) {
                 bool value = va_arg(argv, int);
                 display = fmt.Bool(value);
             } break;
-#undef fmt_mixin
-#define fmt_mixin(T, TYPEID, FN) \
-            case TYPEID: { \
+#undef ___fmt_mixin1
+#undef ___fmt_mixin2
+#define ___fmt_mixin1(T) \
+            case FMT_TYPE_##T: { \
+                T value = va_arg(argv, T); \
+                display = T##_fmt(&value); \
+            } break;
+#define ___fmt_mixin2(T, FN) \
+            case FMT_TYPE_##T: { \
                 T value = va_arg(argv, T); \
                 display = FN(&value); \
             } break;
+
+            BUILTIN_TYPES
             FMT_MIXIN
-#undef fmt_mixin
+#undef ___fmt_mixin1
+#undef ___fmt_mixin2
 // set it back
-#define fmt_mixin(T, TYPEID, FN) T: TYPEID,
+#define ___fmt_mixin1(T) T: FMT_TYPE_##T,
+#define ___fmt_mixin2(T, FN) T: FMT_TYPE_##T,
         }
-        fmt_error err; 
-        if ((err = display.fmt(display.ptr, stream))) return err;
+        fmt_error err = display.fmt(display.ptr, stream); 
+        if (err) return err;
     }
 
     return FMT_OK;
 }
 
-fmt_error INTERNAL(format)(FILE *stream, const char *fmt, ...) {
+FMTDEF fmt_error INTERNAL(format)(FILE *stream, const char *fmt, ...) {
     va_list argv;
     va_start(argv, fmt);
     fmt_error err = INTERNAL(vformat)(stream, fmt, argv);
@@ -248,7 +328,7 @@ fmt_error INTERNAL(format)(FILE *stream, const char *fmt, ...) {
     return err;
 }
 
-void INTERNAL(format_or_die)(FILE *stream, const char *fmt, const char *file, int line, ...) {
+FMTDEF void INTERNAL(format_or_die)(FILE *stream, const char *fmt, const char *file, int line, ...) {
     va_list argv;
     va_start(argv, line);
     fmt_error err; 
@@ -261,86 +341,13 @@ void INTERNAL(format_or_die)(FILE *stream, const char *fmt, const char *file, in
     va_end(argv);
 }
 
-fmt_error INTERNAL(int_fmt)(const void *ctx, FILE *stream) {
-    const int *self = ctx;
-    if (fprintf(stream, "%d", *self) < 0) return FMT_ERR_FPRINTF;
-    return FMT_OK;
-}
-fmt_t INTERNAL(int_display)(int *self) {
-    return (fmt_t){
-        .ptr = self,
-        .fmt = INTERNAL(int_fmt),
-    };
-}
-
-fmt_error INTERNAL(double_fmt)(const void *ctx, FILE *stream) {
-    const double *self = ctx;
-    if (fprintf(stream, "%G", *self) < 0) return FMT_ERR_FPRINTF;
-    return FMT_OK;
-}
-fmt_t INTERNAL(double_display)(double *self) {
-    return (fmt_t){
-        .ptr = self,
-        .fmt = INTERNAL(double_fmt),
-    };
-}
-
-fmt_error INTERNAL(cstr_fmt)(const void *ctx, FILE *stream) {
-    if (fwrite(
-            ctx,
-            strlen(ctx),
-            1,
-            stream
-        ) != 1) return FMT_ERR_FWRITE;
-    return FMT_OK;
-}
-fmt_t INTERNAL(cstr_display)(const char *self) {
-    return (fmt_t){
-        .ptr = self,
-        .fmt = INTERNAL(cstr_fmt),
-    };
-}
-
-fmt_t INTERNAL(bool_display)(bool self) {
-    return (fmt_t) {
-        .ptr = self ? "true" : "false",
-        .fmt = INTERNAL(cstr_fmt),
-    };
-}
-
-fmt_t INTERNAL(fmt_error_display)(fmt_error self) {
-    const char *str;
-    switch (self) {
-        case FMT_OK: {
-            str = "OK";
-        } break;
-        case FMT_ERR_NO_OPENBRACKET: {
-            str = "missing opening {";
-        } break;
-        case FMT_ERR_NO_CLOSEBRACKET: {
-            str = "missing closing }";
-        } break;
-        case FMT_ERR_NOT_ENOUGH_ARGS: {
-            str = "too few arguments";
-        } break;
-        case FMT_ERR_FPRINTF: {
-            str = "fprintf error";
-        } break;
-        case FMT_ERR_FWRITE: {
-            str = "fwrite error";
-        } break;
-    }
-    return (fmt_t) {
-        .ptr = str,
-        .fmt = INTERNAL(cstr_fmt),
-    };
-}
-
 const fmt_mod fmt = {
     ._format = INTERNAL(format),
     ._format_or_die = INTERNAL(format_or_die),
-    .Int = INTERNAL(int_display),
-    .Double = INTERNAL(double_display),
+    .Int = int_fmt,
+    // .Int = INTERNAL(int_display),
+    .Double = double_fmt,
+    // .Double = INTERNAL(double_display),
     .CStr = INTERNAL(cstr_display),
     .Bool = INTERNAL(bool_display),
     .errstr = INTERNAL(fmt_error_display),

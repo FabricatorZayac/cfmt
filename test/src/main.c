@@ -1,8 +1,8 @@
 #include <stdint.h>
 
 #define FMT_INCLUDE_CONFIG_H
-#include "fmt.h"
 
+#include "fmt.h"
 #include "str.h"
 
 typedef struct {
